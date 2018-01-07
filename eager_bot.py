@@ -24,13 +24,11 @@ class DummyTraderBot(TraderBot):
 
     def buy(self, curr, askrate, amount):
         curr.buytotal += amount
-        curr.buytotalprice += Decimal(askrate) * amount
-        self.make_transaction(CurrencyValue(curr.name, amount))
+        curr.buytotalprice += self.make_transaction(CurrencyValue(curr.name, amount))
 
     def sell(self, curr, bidrate, amount):
         curr.selltotal += amount
-        curr.selltotalprice += Decimal(bidrate) * amount
-        self.make_transaction(CurrencyValue(curr.name, -amount))
+        curr.selltotalprice += self.make_transaction(CurrencyValue(curr.name, -amount))
 
     def think(self):
         # dla każdej waluty poza główną wylicz ile średnio zapłaciłeś za jednostkę waluty
@@ -53,7 +51,7 @@ class DummyTraderBot(TraderBot):
                     avgearn = float(curr.selltotalprice) / float(curr.selltotal)
                     ask_rel_avg = askrate / avgearn
                     if ask_rel_avg<0.95: #jeżeli kupisz o 5% taniej to kupuj za wszystko
-                        buy = Decimal(round(free / askrate, 2))
+                        buy = Decimal(int(free / askrate*100)/100)
                         self.buy(curr, askrate, buy)
                 else: #sprzedaj trochę
                     abit = Decimal(round(free/askrate*0.1,2))

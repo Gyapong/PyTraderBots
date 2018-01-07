@@ -215,19 +215,22 @@ class TraderBot:
             "Insufficient funds left {} to pay {}".format(self.baseCurrency.amount, price))
 
     def make_transaction(self, currencyValue):
-        if currencyValue.amount<Decimal(0.01):
-            return
+        val = Decimal(int(currencyValue.amount * 100)/100)
+        if val<Decimal(0.01) and val>Decimal(-0.01):
+            return Decimal(0.0)
+
         if currencyValue.name in self.currentExchangeRates:
             unit_price_idx = 1
-            if currencyValue.amount<0:
+            if val<0:
                 unit_price_idx = 0
-            price = self.currentExchangeRates[currencyValue.name][unit_price_idx] * currencyValue.amount
+            price = self.currentExchangeRates[currencyValue.name][unit_price_idx] * val
             self.pay(price)
             self.wallet.get_currency(currencyValue.name).add(currencyValue)
         else: raise ValueError("Cannot buy or sell " + currencyValue.name)
 
-        entry = (datetime.today(), currencyValue.name, currencyValue.amount)
+        entry = (datetime.today(), currencyValue.name, "{.2f}".format(val))
         csvFileService.appendFile(self.name+"_transactions.csv", [ entry ])
+        return price
 
     def think(self):
         pass
