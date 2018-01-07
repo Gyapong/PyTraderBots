@@ -1,6 +1,7 @@
 from datetime import date
 from datetime import timedelta
 from datetime import datetime
+from decimal import Decimal
 import requests
 import json
 import pandas as pd
@@ -42,7 +43,9 @@ def get_exchange_rates_for(period):
         jData = json.loads(response.content)
         rates = jData['rates']
         for row in rates:
-            data.append( (datetime.strptime(row['effectiveDate'], '%Y-%m-%d'), row['mid']) )
+            val = row['mid']
+            val = Decimal(int(round(val * 10000.0))) / 10000
+            data.append( (datetime.strptime(row['effectiveDate'], '%Y-%m-%d'), val) )
     else:
         print("Error reading data for {}".format(currenturl))
 
