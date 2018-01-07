@@ -9,6 +9,11 @@ class DummyTraderBot(TraderBot):
     #def store(self):
     #    print("{} stored".format(self.name))
 
+    # for custom data structures initialization
+    # only in sim mode
+    #def init(self):
+    #    pass
+
     def think(self):
         pass
         #you have self.currentExchangeRates and self.wallet at your disposal

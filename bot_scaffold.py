@@ -162,8 +162,11 @@ class ExchangeRatesNBPCurrentProvider(ExchangeProvider):
 class TraderBot:
     def __init__(self, name, exchangeProvider):
         self.name = name
-        self.wallet = Wallet('wallet_'+name)
+        self.wallet = Wallet(name+"_wallet")
         self.exchangeProvider = exchangeProvider
+
+    def init(self):
+        pass
 
     def give(self, currencyValue):
         self.wallet.add(currencyValue)
@@ -199,7 +202,7 @@ class TraderBot:
         self.currentWalletValue = value
 
     def storeWalletValue(self, todayDate=None):
-        name = "wallet_" + self.name + "_value.csv"
+        name = self.name + "_wallet_value.csv"
         if todayDate==None:
             todayDate = date.today()
         entry = (todayDate, self.currentWalletValue)
@@ -211,7 +214,9 @@ class TraderBot:
         else: raise ValueError(
             "Insufficient funds left {} to pay {}".format(self.baseCurrency.amount, price))
 
-    def make_transaction(currencyValue):
+    def make_transaction(self, currencyValue):
+        if currencyValue.amount<Decimal(0.01):
+            return
         if currencyValue.name in self.currentExchangeRates:
             unit_price_idx = 1
             if currencyValue.amount<0:
@@ -222,7 +227,7 @@ class TraderBot:
         else: raise ValueError("Cannot buy or sell " + currencyValue.name)
 
         entry = (datetime.today(), currencyValue.name, currencyValue.amount)
-        csvFileService.appendFile(self.name+"_transactions.csv", entry)
+        csvFileService.appendFile(self.name+"_transactions.csv", [ entry ])
 
     def think(self):
         pass
@@ -238,10 +243,11 @@ class TraderBot:
         self.storeWalletValue(todayDate)
 
     def initialize(self):
-        self.baseCurrency = CurrencyValue('PLN', 100)
+        self.baseCurrency = CurrencyValue('PLN', 1000)
         self.give(self.baseCurrency)
-        self.give(CurrencyValue('GBP', 100))
+        self.give(CurrencyValue('GBP', 0))
         self._store()
+        self.init()
 
 class BotSimulator:
     def __init__(self, bot, exchange_rates_provider):
