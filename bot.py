@@ -3,6 +3,8 @@ import requests
 from datetime import date
 from datetime import datetime
 from datetime import timedelta
+from decimal import Decimal
+from bisect import bisect
 import json
 import sys
 
@@ -59,7 +61,7 @@ class CurrencyValue:
 
     @staticmethod
     def fromTuple(tuple):
-        return CurrencyValue(tuple[0], float(tuple[1]))
+        return CurrencyValue(tuple[0], Decimal(tuple[1]))
 
 class Wallet:
     def __init__(self, name):
@@ -105,9 +107,10 @@ class ExchangeRatesNBPHistoricProvider(ExchangeProvider):
         self.mindate = None
         self.maxdate = None
         self.currencyName = currencyName
-        data = [(datetime.strptime(row[0], '%Y-%m-%d').date(), float(row[1])) \
+        data = [(datetime.strptime(row[0], '%Y-%m-%d').date(), Decimal(row[1])) \
                     for row in (csvFileService.readFile(fileName)[1:])]
         self.data = sorted(data, key=lambda x: x[0])
+        self.data_keys, _ = zip(*self.data)
         self._calculate_min_max()
 
     def _calculate_min_max(self):
@@ -124,13 +127,11 @@ class ExchangeRatesNBPHistoricProvider(ExchangeProvider):
         if(datestamp != None and (datestamp<self.mindate or datestamp>self.maxdate)):
             raise ValueError("Cannot found requested date {}".format(datestamp))
         else:
-            last = self.data[0]
-            for row in self.data:
-                rowdate = row[0]
-                if(rowdate > datestamp):
-                    break
-                last = row
-            return self._get_exchange_rate(last)
+            idx = bisect(self.data_keys, datestamp)
+            if self.data_keys[idx] == datestamp:
+                return self._get_exchange_rate(self.data[idx])
+            else:
+                return self._get_exchange_rate(self.data[idx-1])
 
 #x = ExchangeRatesNBPHistoricProvider('GBP','gbp.csv',0.02)
 #x.get_exchange_rates(x.mindate)
@@ -186,9 +187,11 @@ class TraderBot:
                     raise ValueError("Unsupported currency of "+currencyValue.name)
         self.currentWalletValue = value
 
-    def storeWalletValue(self):
+    def storeWalletValue(self, todayDate=None):
         name = "wallet_" + self.name + "_value.csv"
-        entry = (datetime.today(), self.currentWalletValue)
+        if todayDate==None:
+            todayDate = date.today()
+        entry = (todayDate, self.currentWalletValue)
         csvFileService.appendFile(name, [entry])
 
     def pay(self, price):
@@ -221,7 +224,7 @@ class TraderBot:
         if serialize:
             self.store()
         self.calculateWalletValue()
-        self.storeWalletValue()
+        self.storeWalletValue(todayDate)
 
     def initialize(self):
         self.baseCurrency = CurrencyValue('PLN', 100)
@@ -247,6 +250,7 @@ class BotSimulator:
             i+=1
             if i % percent == 0:
                 print("Simulation {}% {} till {}".format(int(i / cnt * 100.0),currdate, maxdate))
+        print("Simulation {}% {} till {}".format(100,currdate, maxdate))
 
 def next_move():
     bot = TraderBot('dummy', ExchangeRatesNBPCurrentProvider())
