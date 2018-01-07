@@ -23,3 +23,7 @@ gdzie znajduje się wycena całego portfela w walucie bazowej
 prymitywny bot mógłby na przykład zapamiętywać sobie po ile średnio kupił funty
 i jeżeli cena sprzedaży jest powyżej tej kwoty to sprzedawał jakąś część waluty
 a jeżeli cena kupna byłaby mniejsza to dokupywał jej
+
+todo:
+refaktor struktury currentExchangeRates na wartości kursu bezpośrednio w wallet
+bot na profecie

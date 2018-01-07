@@ -1,14 +1,13 @@
 import csv
 import requests
-from datetime import date
-from datetime import datetime
-from datetime import timedelta
-from decimal import Decimal
-from decimal import getcontext
+from datetime import date, datetime, timedelta
+from decimal import Decimal, ROUND_FLOOR, ROUND_05UP, getcontext
 from bisect import bisect
 import json
 
-getcontext().prec = 8;
+getcontext().prec = 8
+MONEY_ACCURACY = Decimal('0.01')
+MONEY_EXT_ACCURACY = Decimal('0.0001')
 
 class CsvFileService:
     def __init__(self, delimiter=',', quotechar='\'', dialect=csv.excel):
@@ -151,8 +150,8 @@ class ExchangeRatesNBPCurrentProvider(ExchangeProvider):
             jData = json.loads(response.content)
             rates = jData[0]['rates']
             for rate in rates:
-                bid = Decimal(int(round(rate['bid'] * 10000.0))) / 10000
-                ask = Decimal(int(round(rate['ask'] * 10000.0))) / 10000
+                bid = Decimal(Decimal(rate['bid']).quantize(MONEY_EXT_ACCURACY, ROUND_05UP))
+                ask = Decimal(Decimal(rate['ask']).quantize(MONEY_EXT_ACCURACY, ROUND_05UP))
                 data[rate['code']] = (bid, ask)
 
             return data
@@ -186,8 +185,8 @@ class TraderBot:
     def store(self):
         pass
 
-    def getCurrentExchangeRates(self, date=None):
-        self.currentExchangeRates = self.exchangeProvider.get_exchange_rates(date)
+    def getCurrentExchangeRates(self):
+        self.currentExchangeRates = self.exchangeProvider.get_exchange_rates(self.current_date)
 
     def calculateWalletValue(self):
         value = Decimal(0.0)
@@ -201,11 +200,11 @@ class TraderBot:
                     raise ValueError("Unsupported currency of "+currencyValue.name)
         self.currentWalletValue = value
 
-    def storeWalletValue(self, todayDate=None):
+    def storeWalletValue(self):
         name = self.name + "_wallet_value.csv"
-        if todayDate==None:
-            todayDate = date.today()
-        entry = (todayDate, self.currentWalletValue)
+        if self.current_date==None:
+            self.current_date = date.today()
+        entry = (self.current_date, self.currentWalletValue)
         csvFileService.appendFile(name, [entry])
 
     def pay(self, price):
@@ -215,7 +214,7 @@ class TraderBot:
             "Insufficient funds left {} to pay {}".format(self.baseCurrency.amount, price))
 
     def make_transaction(self, currencyValue):
-        val = Decimal(int(currencyValue.amount * 100)/100)
+        val = Decimal(Decimal(currencyValue.amount).quantize(MONEY_ACCURACY, ROUND_FLOOR))
         if val<Decimal(0.01) and val>Decimal(-0.01):
             return Decimal(0.0)
 
@@ -228,22 +227,25 @@ class TraderBot:
             self.wallet.get_currency(currencyValue.name).add(currencyValue)
         else: raise ValueError("Cannot buy or sell " + currencyValue.name)
 
-        entry = (datetime.today(), currencyValue.name, "{.2f}".format(val))
+        entry = (self.current_date, currencyValue.name, val)
         csvFileService.appendFile(self.name+"_transactions.csv", [ entry ])
         return price
 
     def think(self):
         pass
 
-    def make_move(self, serialize=True,todayDate=None):
+    def set_current_date(self, date):
+        self.current_date = date
+
+    def make_move(self, serialize=True):
         if serialize:
             self._load()
-        self.getCurrentExchangeRates(todayDate)
+        self.getCurrentExchangeRates()
         self.think()
         if serialize:
             self._store()
         self.calculateWalletValue()
-        self.storeWalletValue(todayDate)
+        self.storeWalletValue()
 
     def initialize(self):
         self.baseCurrency = CurrencyValue('PLN', 1000)
@@ -265,9 +267,45 @@ class BotSimulator:
         cnt=(maxdate - self.exchange_rates_provider.mindate).days
         percent = max(int(cnt / 100.0), 1)
         while currdate<maxdate:
-            self.bot.make_move(False, currdate)
+            self.bot.set_current_date(currdate)
+            self.bot.make_move(False)
             currdate += timedelta(1)
             i+=1
             if i % percent == 0:
-                print("Simulation {}% {} till {}".format(int(i / cnt * 100.0),currdate, maxdate))
-        print("Simulation {}% {} till {}".format(100,currdate, maxdate))
+                print("Simulation {}% {} till {} current value: {} {}"\
+                    .format(int(i / cnt * 100.0),currdate, maxdate,
+                        self.bot.currentWalletValue, self.bot.baseCurrency.name))
+        print("Simulation {}% {} till {} current value: {} {}"\
+            .format(100, currdate, maxdate,
+                self.bot.currentWalletValue, self.bot.baseCurrency.name))
+
+class Sandbox:
+    def bot_name(self):
+        raise ValueError('Not implemented exception')
+
+    def make_bot(self, name, exchangeRatesProvider):
+        raise ValueError('Not implemented exception')
+
+    def initialize(self):
+        bot = self.make_bot(self.bot_name(), ExchangeRatesNBPCurrentProvider())
+        bot.initialize()
+
+    def move(self):
+        bot = self.make_bot(self.bot_name(), ExchangeRatesNBPCurrentProvider())
+        bot.make_move()
+
+    def simulate(self):
+        prov = ExchangeRatesNBPHistoricProvider('GBP','gbp.csv',0.02)
+        bot = self.make_bot(self.bot_name()+'-sim', prov)
+        BotSimulator(bot, prov).simulate()
+
+    def interpret_command(self, argv):
+        if len(argv)>1:
+            command = argv[1]
+            if command=='init':
+                self.initialize()
+            else:
+                if command=='sim':
+                    self.simulate()
+                else: self.next_move()
+        else: self.next_move()
