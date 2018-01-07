@@ -4,9 +4,11 @@ from datetime import date
 from datetime import datetime
 from datetime import timedelta
 from decimal import Decimal
+from decimal import getcontext
 from bisect import bisect
 import json
-import sys
+
+getcontext().prec = 8;
 
 class CsvFileService:
     def __init__(self, delimiter=',', quotechar='\'', dialect=csv.excel):
@@ -83,7 +85,6 @@ class Wallet:
         csvFileService.writeFile(self.fileName, data)
 
     def load(self):
-        data = csvFileService.readFile('wallet_dummy.csv')
         data = csvFileService.readFile(self.fileName)
         for row in data:
             self.add(CurrencyValue.fromTuple(row))
@@ -119,8 +120,8 @@ class ExchangeRatesNBPHistoricProvider(ExchangeProvider):
 
     def _get_exchange_rate(self, row):
         price = row[1]
-        bid = (1.0-self.spread)*price
-        ask = (1.0+self.spread)*price
+        bid = Decimal(1.0-self.spread)*price
+        ask = Decimal(1.0+self.spread)*price
         return { self.currencyName: (bid,ask) }
 
     def get_exchange_rates(self, datestamp=None):
@@ -150,7 +151,9 @@ class ExchangeRatesNBPCurrentProvider(ExchangeProvider):
             jData = json.loads(response.content)
             rates = jData[0]['rates']
             for rate in rates:
-                data[rate['code']] = (rate['bid'], rate['ask'])
+                bid = Decimal(int(round(rate['bid'] * 10000.0))) / 10000
+                ask = Decimal(int(round(rate['ask'] * 10000.0))) / 10000
+                data[rate['code']] = (bid, ask)
 
             return data
         else:
@@ -165,18 +168,26 @@ class TraderBot:
     def give(self, currencyValue):
         self.wallet.add(currencyValue)
 
-    def load(self):
+    def _load(self):
         self.wallet.load()
         self.baseCurrency = self.wallet.first
+        self.load()
+
+    def load(self):
+        pass
+
+    def _store(self):
+        self.wallet.store()
+        self.store()
 
     def store(self):
-        self.wallet.store()
+        pass
 
     def getCurrentExchangeRates(self, date=None):
         self.currentExchangeRates = self.exchangeProvider.get_exchange_rates(date)
 
     def calculateWalletValue(self):
-        value = 0.0
+        value = Decimal(0.0)
         for currencyValue in self.wallet.get_currencies():
             if currencyValue.name in self.currentExchangeRates:
                 value += currencyValue.amount * self.currentExchangeRates[currencyValue.name][1]
@@ -218,11 +229,11 @@ class TraderBot:
 
     def make_move(self, serialize=True,todayDate=None):
         if serialize:
-            self.load()
+            self._load()
         self.getCurrentExchangeRates(todayDate)
         self.think()
         if serialize:
-            self.store()
+            self._store()
         self.calculateWalletValue()
         self.storeWalletValue(todayDate)
 
@@ -230,7 +241,7 @@ class TraderBot:
         self.baseCurrency = CurrencyValue('PLN', 100)
         self.give(self.baseCurrency)
         self.give(CurrencyValue('GBP', 100))
-        self.store()
+        self._store()
 
 class BotSimulator:
     def __init__(self, bot, exchange_rates_provider):
@@ -251,23 +262,3 @@ class BotSimulator:
             if i % percent == 0:
                 print("Simulation {}% {} till {}".format(int(i / cnt * 100.0),currdate, maxdate))
         print("Simulation {}% {} till {}".format(100,currdate, maxdate))
-
-def next_move():
-    bot = TraderBot('dummy', ExchangeRatesNBPCurrentProvider())
-    bot.make_move()
-
-
-def simulate():
-    prov = ExchangeRatesNBPHistoricProvider('GBP','gbp.csv',0.02)
-    bot = TraderBot('dummy-sim', prov)
-    BotSimulator(bot, prov).simulate()
-
-if len(sys.argv)>1:
-    command = sys.argv[1]
-    if command=='init':
-        bot.initialize()
-    else:
-        if command=='sim':
-            simulate()
-        else: next_move()
-else: next_move()
