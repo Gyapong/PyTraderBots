@@ -1,0 +1,25 @@
+założenia
+
+jest bot ktory handluje walutą
+
+dostaje na dzień dobry pewną kwotę w dwóch walutach zapis w pliku wallet.csv, np:
+PLN, 100.0
+GPB, 100.0
+pierwsza waluta jest walutą bazową - wszystkie transakcje są dokonywane w odniesieniu do tej waluty
+
+następnie codziennie może podjąć jedną decyzję ile danej waluty kupić, bądź sprzedać
+zapisuje plik transactions.log
+timestamp,GBP,10
+oznacza kupienie 10 funtów
+timestamp,GPB,-5
+oznacza sprzedanie 5 funtów
+
+następnie zapisuje plik walletvalue
+timestamp,123
+gdzie znajduje się wycena całego portfela w walucie bazowej
+
+
+
+prymitywny bot mógłby na przykład zapamiętywać sobie po ile średnio kupił funty
+i jeżeli cena sprzedaży jest powyżej tej kwoty to sprzedawał jakąś część waluty
+a jeżeli cena kupna byłaby mniejsza to dokupywał jej
